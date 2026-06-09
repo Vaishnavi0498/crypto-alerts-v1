@@ -11,12 +11,17 @@ from price_cache import (
     update_price,
     get_price
 )
+from plugins.plugin_manager import (
+    load_plugins
+)
 
 
 class SymbolMonitor:
 
     def __init__(self):
+
         self.current_symbols = []
+        self.plugins = load_plugins()
 
     def get_symbols(self):
 
@@ -46,11 +51,19 @@ class SymbolMonitor:
                     print("=" * 60)
                     print()
 
+                trade_streams = [
+                    f"{s.lower()}@trade"
+                    for s in self.current_symbols
+                ]
+
+                kline_streams = [
+                    f"{s.lower()}@kline_1h"
+                    for s in self.current_symbols
+                ]
+
                 streams = "/".join(
-                    [
-                        f"{s.lower()}@trade"
-                        for s in self.current_symbols
-                    ]
+                    trade_streams +
+                    kline_streams
                 )
 
                 url = (
@@ -68,43 +81,87 @@ class SymbolMonitor:
 
                         data = json.loads(message)
 
-                        trade = data["data"]
+                        payload = data["data"]
 
-                        symbol = trade["s"]
+                        event_type = payload["e"]
+                        events = []
 
-                        price = float(trade["p"])
+                        # --------------------------------
+                        # TRADE EVENTS
+                        # --------------------------------
 
-                        if price <= 0:
+                        if event_type == "trade":
 
-                            continue
+                            symbol = payload["s"]
 
-                        if symbol in ["BTCUSDT", "ETHUSDT"]:
+                            price = float(
+                                payload["p"]
+                            )
 
-                            cached = get_price(symbol)
+                            if price <= 0:
 
-                            if (
-                                cached is not None
-                                and cached > 0
-                                and abs(price - cached) / cached > 0.50
-                            ):
-                                print(
-                                    "REJECTING SUSPICIOUS PRICE",
-                                    symbol,
-                                    price,
-                                    cached
-                                )
                                 continue
 
-                        update_price(
-                            symbol,
-                            price,
-                            datetime.now(UTC).isoformat()
-                        )
+                            if symbol in ["BTCUSDT", "ETHUSDT"]:
 
-                        events = evaluate_alerts(
-                            symbol,
-                            price
-                        )
+                                cached = get_price(symbol)
+
+                                if (
+                                    cached is not None
+                                    and cached > 0
+                                    and abs(price - cached) / cached > 0.50
+                                ):
+                                    print(
+                                        "REJECTING SUSPICIOUS PRICE",
+                                        symbol,
+                                        price,
+                                        cached
+                                    )
+                                    continue
+
+                            update_price(
+                                symbol,
+                                price,
+                                datetime.now(UTC).isoformat()
+                            )
+
+                            for plugin in self.plugins:
+
+                                events.extend(
+                                    plugin.process(
+                                        symbol=symbol,
+                                        price=price,
+                                        trade=payload
+                                    )
+                                )
+
+                        # --------------------------------
+                        # KLINE EVENTS
+                        # --------------------------------
+
+                        elif event_type == "kline":
+
+                            symbol = payload["s"]
+
+                            kline = payload["k"]
+
+                            for plugin in self.plugins:
+
+                                if hasattr(
+                                    plugin,
+                                    "process_kline"
+                                ):
+
+                                    events.extend(
+                                        plugin.process_kline(
+                                            symbol,
+                                            kline
+                                        )
+                                    )
+
+                        # --------------------------------
+                        # SEND ALERTS
+                        # --------------------------------
 
                         for event in events:
 
