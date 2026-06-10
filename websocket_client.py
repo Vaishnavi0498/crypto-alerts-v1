@@ -3,7 +3,6 @@ import json
 import websockets
 
 from database import get_monitored_symbols
-from alert_engine import evaluate_alerts
 from notifications import send_alert
 from datetime import datetime, UTC
 from price_cache import (
@@ -56,22 +55,21 @@ class SymbolMonitor:
                     for s in self.current_symbols
                 ]
 
-                kline_streams = [
-                    f"{s.lower()}@kline_1h"
-                    for s in self.current_symbols
-                ]
-
-                streams = "/".join(
-                    trade_streams +
-                    kline_streams
-                )
+                streams = "/".join(trade_streams)
 
                 url = (
                     "wss://fstream.binance.com/stream?streams="
                     + streams
                 )
 
+                print(
+                    "URL LENGTH:",
+                    len(url)
+                )
+
                 async with websockets.connect(url) as ws:
+
+                    print("CONNECTED")
 
                     reconnect_check = 0
 
@@ -127,35 +125,16 @@ class SymbolMonitor:
 
                             for plugin in self.plugins:
 
-                                events.extend(
-                                    plugin.process(
-                                        symbol=symbol,
-                                        price=price,
-                                        trade=payload
-                                    )
-                                )
-
-                        # --------------------------------
-                        # KLINE EVENTS
-                        # --------------------------------
-
-                        elif event_type == "kline":
-
-                            symbol = payload["s"]
-
-                            kline = payload["k"]
-
-                            for plugin in self.plugins:
-
                                 if hasattr(
                                     plugin,
-                                    "process_kline"
+                                    "process_trade"
                                 ):
 
                                     events.extend(
-                                        plugin.process_kline(
-                                            symbol,
-                                            kline
+                                        plugin.process_trade(
+                                            symbol=symbol,
+                                            price=price,
+                                            trade=payload
                                         )
                                     )
 

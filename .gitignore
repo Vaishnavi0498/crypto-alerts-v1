@@ -1,6 +1,9 @@
 # Python
 __pycache__/
 *.pyc
+.DS_Store
+venv/
+data/alerts.db
 
 # Virtual environment
 venv/

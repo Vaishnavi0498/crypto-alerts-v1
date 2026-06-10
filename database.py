@@ -66,6 +66,19 @@ def init_db():
     )
     """)
 
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS hourly_alerts (
+
+        symbol TEXT NOT NULL,
+        candle_time INTEGER NOT NULL,
+
+        PRIMARY KEY (
+        symbol,
+        candle_time
+        )
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -430,3 +443,53 @@ def history_count():
     conn.close()
 
     return count
+
+def hourly_alert_exists(
+    symbol,
+    candle_time
+):
+
+    conn = get_connection()
+
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM hourly_alerts
+        WHERE symbol = ?
+        AND candle_time = ?
+        """,
+        (
+            symbol,
+            candle_time
+        )
+    ).fetchone()
+
+    conn.close()
+
+    return row is not None
+
+def save_hourly_alert(
+    symbol,
+    candle_time
+):
+
+    conn = get_connection()
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO
+        hourly_alerts(
+            symbol,
+            candle_time
+        )
+        VALUES (?,?)
+        """,
+        (
+            symbol,
+            candle_time
+        )
+    )
+
+    conn.commit()
+
+    conn.close()

@@ -1,50 +1,41 @@
-from datetime import datetime, UTC
+from database import (
+    hourly_alert_exists,
+    save_hourly_alert
+)
+from plugins.base_hourly_plugin import (
+    BaseHourlyPlugin
+)
 
+class HourlyMovePlugin(
+    BaseHourlyPlugin
+):
 
-class HourlyMoveAlertPlugin:
-
-    def __init__(self):
-
-        self.last_alerted_candle = {}
+    THRESHOLD = 10
 
     def process(
         self,
         symbol,
-        price,
-        trade=None
+        candles
     ):
 
-        return []
-
-    def process_kline(
-        self,
-        symbol,
-        kline
-    ):
+        candle = candles[-2]
 
         events = []
 
-        candle_closed = kline["x"]
+        candle_time = candle["close_time"]
 
-        if not candle_closed:
-            return events
-
-        candle_time = kline["T"]
-
-        cache_key = (
+        if hourly_alert_exists(
             symbol,
             candle_time
-        )
-
-        if cache_key in self.last_alerted_candle:
+        ):
             return events
 
         open_price = float(
-            kline["o"]
+            candle["open"]
         )
 
         close_price = float(
-            kline["c"]
+            candle["close"]
         )
 
         move_pct = (
@@ -52,12 +43,13 @@ class HourlyMoveAlertPlugin:
             / open_price
         ) * 100
 
-        if abs(move_pct) < 10:
+        if abs(move_pct) < self.THRESHOLD:
             return events
 
-        self.last_alerted_candle[
-            cache_key
-        ] = True
+        save_hourly_alert(
+            symbol,
+            candle_time
+        )
 
         direction = (
             "UP"
@@ -68,7 +60,7 @@ class HourlyMoveAlertPlugin:
         notes = (
             f"{symbol} moved "
             f"{move_pct:.2f}% "
-            f"in the last hourly candle.\n\n"
+            f"in the last completed 1h candle.\n\n"
             f"Direction: {direction}\n"
             f"Open: {open_price}\n"
             f"Close: {close_price}"
@@ -76,7 +68,6 @@ class HourlyMoveAlertPlugin:
 
         events.append(
             {
-                "alert_id": None,
                 "symbol": symbol,
                 "price": close_price,
                 "notes": notes,

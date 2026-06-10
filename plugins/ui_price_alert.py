@@ -1,13 +1,19 @@
-from alert_engine import evaluate_alerts
+from plugins.base_plugin import BasePlugin
+
+from alert_engine import (
+    evaluate_alerts
+)
 
 
-class UIPriceAlertPlugin:
+class UIPriceAlertPlugin(
+    BasePlugin
+):
 
-    def process(
+    def process_trade(
         self,
         symbol,
         price,
-        trade=None
+        trade
     ):
         return evaluate_alerts(
             symbol,
