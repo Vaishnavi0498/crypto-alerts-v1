@@ -1,4 +1,4 @@
-from plugins.ui_price_alert import (
+from plugins.ui.ui_price_alert import (
     UIPriceAlertPlugin
 )
 

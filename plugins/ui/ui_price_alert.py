@@ -1,4 +1,4 @@
-from plugins.base_plugin import BasePlugin
+from plugins.ui.base_plugin import BasePlugin
 
 from alert_engine import (
     evaluate_alerts

@@ -10,7 +10,7 @@ from price_cache import (
     update_price,
     get_price
 )
-from plugins.plugin_manager import (
+from plugins.ui.plugin_manager import (
     load_plugins
 )
 

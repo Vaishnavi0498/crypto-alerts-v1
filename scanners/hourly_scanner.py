@@ -11,8 +11,8 @@ from notifications import (
     send_alert
 )
 
-from plugins.hourly_plugin_manager import (
-    load_hourly_plugins
+from plugins.scanner.plugin_manager import (
+    load_plugins
 )
 
 from data_sources.binance_klines import (
@@ -33,7 +33,7 @@ class HourlyScanner(
         )
 
         self.plugins = (
-            load_hourly_plugins()
+            load_plugins()
         )
 
         print(

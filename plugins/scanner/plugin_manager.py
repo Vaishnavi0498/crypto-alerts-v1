@@ -1,13 +1,13 @@
-from plugins.hourly_move_plugin import (
+from plugins.scanner.hourly_move_plugin import (
     HourlyMovePlugin
 )
 
-from plugins.hourly_volume_plugin import (
+from plugins.scanner.hourly_volume_plugin import (
     HourlyVolumePlugin
 )
 
 
-def load_hourly_plugins():
+def load_plugins():
 
     return [
         HourlyMovePlugin(),

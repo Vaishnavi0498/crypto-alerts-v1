@@ -1,4 +1,4 @@
-from plugins.base_hourly_plugin import (
+from plugins.scanner.base_hourly_plugin import (
     BaseHourlyPlugin
 )
 
@@ -6,7 +6,7 @@ class HourlyVolumePlugin(
     BaseHourlyPlugin
 ):
 
-    MULTIPLIER = 5
+    MULTIPLIER = 10
 
     def process(
         self,
