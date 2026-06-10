@@ -6,7 +6,7 @@ class HourlyVolumePlugin(
     BaseHourlyPlugin
 ):
 
-    MULTIPLIER = 3
+    MULTIPLIER = 5
 
     def process(
         self,
