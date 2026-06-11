@@ -1,4 +1,4 @@
-class BaseHourlyPlugin:
+class BasePlugin:
 
     def process(
         self,

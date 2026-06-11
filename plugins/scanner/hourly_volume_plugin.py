@@ -1,9 +1,9 @@
-from plugins.scanner.base_hourly_plugin import (
-    BaseHourlyPlugin
+from plugins.scanner.base_plugin import (
+    BasePlugin
 )
 
 class HourlyVolumePlugin(
-    BaseHourlyPlugin
+    BasePlugin
 ):
 
     MULTIPLIER = 10

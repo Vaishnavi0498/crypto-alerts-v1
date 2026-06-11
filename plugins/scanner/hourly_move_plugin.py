@@ -2,12 +2,12 @@ from database import (
     hourly_alert_exists,
     save_hourly_alert
 )
-from plugins.scanner.base_hourly_plugin import (
-    BaseHourlyPlugin
+from plugins.scanner.base_plugin import (
+    BasePlugin
 )
 
 class HourlyMovePlugin(
-    BaseHourlyPlugin
+    BasePlugin
 ):
 
     THRESHOLD = 10
