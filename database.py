@@ -70,11 +70,15 @@ def init_db():
     CREATE TABLE IF NOT EXISTS hourly_alerts (
 
         symbol TEXT NOT NULL,
+
         candle_time INTEGER NOT NULL,
 
+        alert_type TEXT NOT NULL,
+
         PRIMARY KEY (
-        symbol,
-        candle_time
+            symbol,
+            candle_time,
+            alert_type
         )
     )
     """)
@@ -446,7 +450,8 @@ def history_count():
 
 def hourly_alert_exists(
     symbol,
-    candle_time
+    candle_time,
+    alert_type
 ):
 
     conn = get_connection()
@@ -457,10 +462,12 @@ def hourly_alert_exists(
         FROM hourly_alerts
         WHERE symbol = ?
         AND candle_time = ?
+        AND alert_type = ?
         """,
         (
             symbol,
-            candle_time
+            candle_time,
+            alert_type
         )
     ).fetchone()
 
@@ -470,7 +477,8 @@ def hourly_alert_exists(
 
 def save_hourly_alert(
     symbol,
-    candle_time
+    candle_time,
+    alert_type
 ):
 
     conn = get_connection()
@@ -480,13 +488,15 @@ def save_hourly_alert(
         INSERT OR IGNORE INTO
         hourly_alerts(
             symbol,
-            candle_time
+            candle_time,
+            alert_type
         )
-        VALUES (?,?)
+        VALUES (?,?,?)
         """,
         (
             symbol,
-            candle_time
+            candle_time,
+            alert_type
         )
     )
 

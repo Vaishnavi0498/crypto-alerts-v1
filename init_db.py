@@ -6,9 +6,17 @@ print("Database initialized")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS hourly_alerts (
-    symbol TEXT,
-    candle_time INTEGER,
-    PRIMARY KEY(symbol, candle_time)
+
+    symbol TEXT NOT NULL,
+
+    candle_time INTEGER NOT NULL,
+
+    alert_type TEXT NOT NULL,
+
+    PRIMARY KEY (
+        symbol,
+        candle_time,
+        alert_type
+    )
 )
-""")
 """)

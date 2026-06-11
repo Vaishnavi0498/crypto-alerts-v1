@@ -1,14 +1,13 @@
-from database import (
-    hourly_alert_exists,
-    save_hourly_alert
-)
 from plugins.scanner.base_plugin import (
     BasePlugin
 )
 
+
 class HourlyMovePlugin(
     BasePlugin
 ):
+
+    ALERT_TYPE = "MOVE"
 
     THRESHOLD = 10
 
@@ -24,19 +23,15 @@ class HourlyMovePlugin(
 
         candle_time = candle["close_time"]
 
-        if hourly_alert_exists(
+        if self.already_triggered(
             symbol,
             candle_time
         ):
             return events
 
-        open_price = float(
-            candle["open"]
-        )
+        open_price = candle["open"]
 
-        close_price = float(
-            candle["close"]
-        )
+        close_price = candle["close"]
 
         move_pct = (
             (close_price - open_price)
@@ -46,7 +41,7 @@ class HourlyMovePlugin(
         if abs(move_pct) < self.THRESHOLD:
             return events
 
-        save_hourly_alert(
+        self.mark_triggered(
             symbol,
             candle_time
         )

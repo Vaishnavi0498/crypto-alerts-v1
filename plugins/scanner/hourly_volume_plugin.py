@@ -2,9 +2,12 @@ from plugins.scanner.base_plugin import (
     BasePlugin
 )
 
+
 class HourlyVolumePlugin(
     BasePlugin
 ):
+
+    ALERT_TYPE = "VOLUME"
 
     MULTIPLIER = 10
 
@@ -14,16 +17,22 @@ class HourlyVolumePlugin(
         candles
     ):
 
-        events = []
-
         latest = candles[-2]
+
+        candle_time = latest["close_time"]
+
+        if self.already_triggered(
+            symbol,
+            candle_time
+        ):
+            return []
 
         previous = candles[:-2]
 
         avg_volume = (
             sum(
-                c["volume"]
-                for c in previous
+                candle["volume"]
+                for candle in previous
             )
             /
             len(previous)
@@ -34,7 +43,12 @@ class HourlyVolumePlugin(
             <
             avg_volume * self.MULTIPLIER
         ):
-            return events
+            return []
+
+        self.mark_triggered(
+            symbol,
+            candle_time
+        )
 
         notes = (
             f"Volume Spike\n\n"
@@ -44,13 +58,11 @@ class HourlyVolumePlugin(
             f"{avg_volume:.2f}"
         )
 
-        events.append(
+        return [
             {
                 "symbol": symbol,
                 "price": latest["close"],
                 "notes": notes,
                 "type": "volume_spike"
             }
-        )
-
-        return events
+        ]

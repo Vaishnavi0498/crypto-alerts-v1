@@ -1,14 +1,13 @@
-from database import (
-    hourly_alert_exists,
-    save_hourly_alert
-)
-
 from plugins.scanner.base_plugin import (
     BasePlugin
 )
 
 
-class RSIPlugin(BasePlugin):
+class RSIPlugin(
+    BasePlugin
+):
+
+    ALERT_TYPE = "RSI85"
 
     RSI_THRESHOLD = 85
 
@@ -57,15 +56,13 @@ class RSIPlugin(BasePlugin):
 
         rs = avg_gain / avg_loss
 
-        rsi = (
+        return (
             100
             - (
                 100
                 / (1 + rs)
             )
         )
-
-        return rsi
 
     def process(
         self,
@@ -77,24 +74,20 @@ class RSIPlugin(BasePlugin):
             return []
 
         closes = [
-            float(c[4])
-            for c in candles[:-1]
+            candle["close"]
+            for candle in candles[:-1]
         ]
 
         rsi = self.calculate_rsi(
             closes
         )
 
-        last_closed = candles[-2]
+        latest = candles[-2]
 
-        candle_time = last_closed[6]
+        candle_time = latest["close_time"]
 
-        unique_key = (
-            f"{symbol}_RSI85"
-        )
-
-        if hourly_alert_exists(
-            unique_key,
+        if self.already_triggered(
+            symbol,
             candle_time
         ):
             return []
@@ -102,17 +95,15 @@ class RSIPlugin(BasePlugin):
         if rsi < self.RSI_THRESHOLD:
             return []
 
-        save_hourly_alert(
-            unique_key,
+        self.mark_triggered(
+            symbol,
             candle_time
         )
 
         return [
             {
                 "symbol": symbol,
-                "price": float(
-                    last_closed[4]
-                ),
+                "price": latest["close"],
                 "notes":
                     f"RSI Alert\n\n"
                     f"RSI: {rsi:.2f}\n"
