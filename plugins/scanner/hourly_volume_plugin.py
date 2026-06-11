@@ -9,7 +9,7 @@ class HourlyVolumePlugin(
 
     ALERT_TYPE = "VOLUME"
 
-    MULTIPLIER = 10
+    MULTIPLIER = 20
 
     def process(
         self,
