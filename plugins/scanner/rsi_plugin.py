@@ -70,15 +70,20 @@ class RSIPlugin(
         candles
     ):
 
-        if len(candles) < 20:
+        if len(candles) < 30:
             return []
 
+        # Use only completed candles
         closes = [
             candle["close"]
             for candle in candles[:-1]
         ]
 
-        rsi = self.calculate_rsi(
+        previous_rsi = self.calculate_rsi(
+            closes[:-1]
+        )
+
+        current_rsi = self.calculate_rsi(
             closes
         )
 
@@ -92,7 +97,11 @@ class RSIPlugin(
         ):
             return []
 
-        if rsi < self.RSI_THRESHOLD:
+        # Alert only on an upward crossing
+        if not (
+            previous_rsi < self.RSI_THRESHOLD
+            and current_rsi >= self.RSI_THRESHOLD
+        ):
             return []
 
         self.mark_triggered(
@@ -105,8 +114,9 @@ class RSIPlugin(
                 "symbol": symbol,
                 "price": latest["close"],
                 "notes":
-                    f"RSI Alert\n\n"
-                    f"RSI: {rsi:.2f}\n"
+                    f"RSI Cross Alert\n\n"
+                    f"Previous RSI: {previous_rsi:.2f}\n"
+                    f"Current RSI: {current_rsi:.2f}\n"
                     f"Threshold: {self.RSI_THRESHOLD}"
             }
         ]

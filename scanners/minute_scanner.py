@@ -7,13 +7,13 @@ from plugins.scanner.plugin_manager import (
 )
 
 
-class HourlyScanner(
+class MinuteScanner(
     BaseScanner
 ):
 
-    INTERVAL = "1h"
+    INTERVAL = "1m"
 
-    LIMIT = 100
+    LIMIT = 30
 
     SLEEP_SECONDS = 300
 
@@ -21,11 +21,11 @@ class HourlyScanner(
 
         super().__init__(
             plugins=load_plugins(
-                interval="1h"
+                interval="1m"
             )
         )
 
 
 if __name__ == "__main__":
 
-    HourlyScanner().run()
+    MinuteScanner().run()

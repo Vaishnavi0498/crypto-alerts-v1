@@ -11,10 +11,26 @@ from plugins.scanner.rsi_plugin import (
 )
 
 
-def load_plugins():
+def load_plugins(
+    interval
+):
 
-    return [
-        HourlyMovePlugin(),
-        HourlyVolumePlugin(),
-        RSIPlugin()
-    ]
+    plugins = []
+
+    if interval == "1h":
+
+        plugins.append(
+            HourlyMovePlugin()
+        )
+
+        plugins.append(
+            HourlyVolumePlugin()
+        )
+
+    if interval == "1m":
+
+        plugins.append(
+            RSIPlugin()
+        )
+
+    return plugins
