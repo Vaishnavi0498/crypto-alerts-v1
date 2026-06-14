@@ -22,12 +22,31 @@ from database import (
 )
 
 from symbol_service import (
-    get_futures_symbols
+    get_symbols
 )
 
 from streamlit_autorefresh import st_autorefresh
 
 init_db()
+
+
+def format_price(price):
+
+    if price is None:
+        return "-"
+
+    if price >= 1000:
+        return f"{price:.2f}"
+
+    elif price >= 1:
+        return f"{price:.4f}"
+
+    elif price >= 0.01:
+        return f"{price:.5f}"
+
+    else:
+        return f"{price:.8f}"
+
 
 st.set_page_config(
     page_title="Crypto Alert Center",
@@ -83,8 +102,20 @@ prices = get_prices()
 
 if prices:
 
+    formatted_prices = []
+
+    for symbol, price, updated_at in prices:
+
+        formatted_prices.append(
+            (
+                symbol,
+                format_price(price),
+                updated_at
+            )
+        )
+
     prices_df = pd.DataFrame(
-        prices,
+        formatted_prices,
         columns=[
             "Symbol",
             "Price",
@@ -109,7 +140,7 @@ else:
 
 st.header("Create Alert")
 
-symbols = get_futures_symbols()
+symbols = get_symbols()
 
 with st.form("alert_form"):
 
@@ -125,7 +156,8 @@ with st.form("alert_form"):
 
     target_price = st.number_input(
         "Target Price",
-        min_value=0.0
+        min_value=0.0,
+        format="%.8f"
     )
 
     alert_type = st.selectbox(
@@ -215,7 +247,7 @@ if active_alerts:
         ) = row
 
         with st.expander(
-            f"{symbol} {condition} {target_price}"
+            f"{symbol} {condition} {format_price(target_price)}"
         ):
 
             edit_mode = st.checkbox(
@@ -235,6 +267,7 @@ if active_alerts:
                 new_target = st.number_input(
                     "Target Price",
                     value=float(target_price),
+                    format="%.8f",
                     key=f"target_{alert_id}"
                 )
 
@@ -288,7 +321,7 @@ if active_alerts:
                     )
 
                     st.write(
-                        f"Current Price: {current_price}"
+                        f"Current Price: {format_price(current_price)}"
                     )
 
                 st.write(
@@ -367,6 +400,11 @@ if history:
             "Notes"
         ]
     ]
+
+    history_df["Trigger Price"] = (
+    history_df["Trigger Price"]
+    .apply(format_price)
+)
 
     st.dataframe(
         history_df,
