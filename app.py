@@ -156,7 +156,8 @@ with st.form("alert_form"):
 
     target_price = st.number_input(
         "Target Price",
-        min_value=0.0,
+        min_value=0.00000001,
+        value=0.00000001,
         format="%.8f"
     )
 
@@ -311,14 +312,22 @@ if active_alerts:
 
                 if current_price is not None:
 
-                    pct_diff = (
-                        (current_price - target_price)
-                        / target_price
-                    ) * 100
+                    if target_price > 0:
 
-                    st.write(
-                        f"Distance: {pct_diff:.2f}%"
-                    )
+                        pct_diff = (
+                            (current_price - target_price)
+                            / target_price
+                        ) * 100
+
+                        st.write(
+                            f"Distance: {pct_diff:.2f}%"
+                        )
+
+                    else:
+
+                        st.write(
+                            "Distance: N/A (target price is 0)"
+                        )
 
                     st.write(
                         f"Current Price: {format_price(current_price)}"
