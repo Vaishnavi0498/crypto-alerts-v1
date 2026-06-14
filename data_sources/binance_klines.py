@@ -1,4 +1,4 @@
-import requests
+from http_client import SESSION
 
 
 BASE_URL = (
@@ -12,7 +12,7 @@ def get_recent_candles(
     limit=20
 ):
 
-    response = requests.get(
+    response = SESSION.get(
         BASE_URL,
         params={
             "symbol": symbol,

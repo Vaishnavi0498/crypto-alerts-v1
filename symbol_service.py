@@ -1,5 +1,5 @@
 import time
-import requests
+from http_client import SESSION
 
 BINANCE_URL = (
     "https://fapi.binance.com/fapi/v1/exchangeInfo"
@@ -17,7 +17,7 @@ _last_refresh = 0
 
 def _load_symbols():
 
-    binance_response = requests.get(
+    binance_response = SESSION.get(
         BINANCE_URL,
         timeout=30
     )
@@ -39,7 +39,7 @@ def _load_symbols():
                 item["symbol"]
             )
 
-    coindcx_response = requests.get(
+    coindcx_response = SESSION.get(
         COINDCX_URL,
         timeout=30
     )

@@ -29,7 +29,7 @@ def load_coindcx_symbols():
                     json.load(f)
                 )
 
-    response = requests.get(
+    response = SESSION.get(
         URL,
         timeout=20
     )

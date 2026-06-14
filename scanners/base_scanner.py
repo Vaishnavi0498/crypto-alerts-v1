@@ -3,6 +3,7 @@ import time
 from notifications import send_alert
 
 from symbol_service import get_symbols
+from concurrent.futures import ThreadPoolExecutor
 
 from data_sources.binance_klines import (
     get_recent_candles
@@ -58,6 +59,25 @@ class BaseScanner:
                     notes=event["notes"]
                 )
 
+    MAX_WORKERS = 20
+
+    def _safe_scan_symbol(
+        self,
+        symbol
+    ):
+
+        try:
+
+            self.scan_symbol(
+                symbol
+            )
+
+        except Exception as e:
+
+            print(
+                f"SCAN ERROR {symbol}: {e}"
+            )
+
     def run(self):
 
         while True:
@@ -66,19 +86,14 @@ class BaseScanner:
                 f"Starting {self.INTERVAL} scan..."
             )
 
-            for symbol in self.symbols:
+            with ThreadPoolExecutor(
+                max_workers=self.MAX_WORKERS
+            ) as executor:
 
-                try:
-
-                    self.scan_symbol(
-                        symbol
-                    )
-
-                except Exception as e:
-
-                    print(
-                        f"SCAN ERROR {symbol}: {e}"
-                    )
+                executor.map(
+                    self._safe_scan_symbol,
+                    self.symbols
+                )
 
             print(
                 "Scan complete."
