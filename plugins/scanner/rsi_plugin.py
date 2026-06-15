@@ -1,6 +1,7 @@
 from plugins.scanner.base_plugin import (
     BasePlugin
 )
+import time
 
 
 class RSIPlugin(
@@ -12,6 +13,10 @@ class RSIPlugin(
     RSI_THRESHOLD = 85
 
     RSI_PERIOD = 14
+
+    COOLDOWN_SECONDS = 30 * 60  # 30 minutes
+
+    _last_alert_times = {}
 
     def calculate_rsi(
         self,
@@ -103,6 +108,18 @@ class RSIPlugin(
             and current_rsi >= self.RSI_THRESHOLD
         ):
             return []
+
+        now = time.time()
+
+        last_alert = self._last_alert_times.get(symbol)
+
+        if (
+            last_alert is not None
+            and now - last_alert < self.COOLDOWN_SECONDS
+        ):
+            return []
+
+        self._last_alert_times[symbol] = now
 
         self.mark_triggered(
             symbol,
