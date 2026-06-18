@@ -13,7 +13,7 @@ class MinuteScanner(
 
     INTERVAL = "1m"
 
-    LIMIT = 30
+    LIMIT = 300
 
     SLEEP_SECONDS = 300
 

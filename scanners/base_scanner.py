@@ -1,6 +1,5 @@
 import time
-
-from notifications import send_alert
+from batcher import queue_alert
 
 from symbol_service import get_symbols
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from data_sources.binance_klines import (
     get_recent_candles
 )
+
+import threading
+from batcher import background_flush_loop
 
 
 class BaseScanner:
@@ -53,7 +55,7 @@ class BaseScanner:
 
             for event in events:
 
-                send_alert(
+                queue_alert(
                     symbol=event["symbol"],
                     price=event["price"],
                     notes=event["notes"]
@@ -79,6 +81,12 @@ class BaseScanner:
             )
 
     def run(self):
+
+        threading.Thread(
+            target=background_flush_loop,
+            daemon=True,
+        ).start()
+
 
         while True:
 
