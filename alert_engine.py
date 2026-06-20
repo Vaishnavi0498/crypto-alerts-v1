@@ -5,6 +5,9 @@ from database import (
     deactivate_alert,
     add_history
 )
+import time
+
+RECURRING_COOLDOWN_SECONDS = 10 * 60  # 10 minutes
 
 
 def evaluate_alerts(
@@ -89,6 +92,32 @@ def evaluate_alerts(
         # -------------------
 
         if should_trigger:
+
+            # Cooldown for recurring alerts
+            if (
+                alert_type == "recurring"
+                and last_triggered_at is not None
+            ):
+                # If last_triggered_at is a datetime object
+                if hasattr(last_triggered_at, "timestamp"):
+                    elapsed = time.time() - last_triggered_at.timestamp()
+                else:
+                    # If it is already stored as a Unix timestamp
+                    elapsed = time.time() - float(last_triggered_at)
+
+                if elapsed < RECURRING_COOLDOWN_SECONDS:
+                    print(
+                        f"Skipping recurring alert for {symbol} "
+                        f"(cooldown {elapsed:.1f}s < {RECURRING_COOLDOWN_SECONDS}s)"
+                    )
+
+                    # Still update state before continuing
+                    update_state(
+                        alert_id,
+                        current_state
+                    )
+
+                    continue
 
             print(
                 "TRIGGERING",
