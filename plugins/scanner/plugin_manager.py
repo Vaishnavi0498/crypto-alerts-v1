@@ -10,6 +10,10 @@ from plugins.scanner.rsi_plugin import (
     RSIPlugin
 )
 
+from plugins.scanner.choc_plugin import (
+    ChoCHPlugin
+)
+
 
 def load_plugins(
     interval
@@ -31,6 +35,12 @@ def load_plugins(
 
         plugins.append(
             RSIPlugin()
+        )
+
+    if interval == "15m":
+
+        plugins.append(
+            ChoCHPlugin()
         )
 
     return plugins
