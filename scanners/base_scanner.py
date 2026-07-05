@@ -1,4 +1,5 @@
 import time
+import traceback
 from batcher import queue_alert
 
 from symbol_service import get_symbols
@@ -74,11 +75,9 @@ class BaseScanner:
                 symbol
             )
 
-        except Exception as e:
-
-            print(
-                f"SCAN ERROR {symbol}: {e}"
-            )
+        except Exception:
+            print(f"\n========== {symbol} ==========")
+            traceback.print_exc()
 
     def run(self):
 

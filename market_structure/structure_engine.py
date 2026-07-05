@@ -16,10 +16,18 @@ logger = logging.getLogger(__name__)
 
 class StructureEngine:
 
-    def __init__(self, left=3, right=3):
+    def __init__(
+        self,
+        left=3,
+        right=3,
+        reversal_confirmation_timeout=15,
+    ):
 
         self.left = left
         self.right = right
+        self.reversal_confirmation_timeout = (
+            reversal_confirmation_timeout
+        )
 
         self.state = StructureState()
 
@@ -352,16 +360,16 @@ class StructureEngine:
         context,
     ):
 
-        direction = (
-            context["candidate_direction"]
-            or context["trend"]
+        structure = self._target_structure(
+            context,
         )
+        direction = structure["trend"]
 
         if direction == "BULLISH":
-            return context["last_confirmed_HH"]
+            return structure["HH"]
 
         if direction == "BEARISH":
-            return context["last_confirmed_LL"]
+            return structure["LL"]
 
         return None
 
@@ -370,35 +378,119 @@ class StructureEngine:
         context,
     ):
 
-        direction = (
-            context["candidate_direction"]
-            or context["trend"]
+        structure = self._target_structure(
+            context,
         )
+        direction = structure["trend"]
 
         if direction == "BULLISH":
-            return context["last_confirmed_HL"]
+            return structure["HL"]
 
         if direction == "BEARISH":
-            return context["last_confirmed_LH"]
+            return structure["LH"]
 
         return None
+
+    def _target_structure(
+        self,
+        context,
+    ):
+
+        self._ensure_structures(
+            context,
+        )
+
+        if context["phase"].startswith(
+            "WAITING_REVERSAL"
+        ):
+            return context["candidate"] or {
+                "trend": context["candidate_direction"],
+                "HH": None,
+                "HL": None,
+                "LL": None,
+                "LH": None,
+            }
+
+        return context["confirmed"]
+
+    def _ensure_structures(
+        self,
+        context,
+    ):
+
+        if "confirmed" not in context:
+            context["confirmed"] = {
+                "trend": context["trend"],
+                "HH": context["last_confirmed_HH"],
+                "HL": context["last_confirmed_HL"],
+                "LL": context["last_confirmed_LL"],
+                "LH": context["last_confirmed_LH"],
+            }
+
+        if "candidate" not in context:
+            context["candidate"] = None
+
+    def _empty_structure(
+        self,
+        direction,
+    ):
+
+        return {
+            "trend": direction,
+            "HH": None,
+            "HL": None,
+            "LL": None,
+            "LH": None,
+        }
+
+    def _candidate_structure(
+        self,
+        context,
+    ):
+
+        self._ensure_structures(
+            context,
+        )
+
+        if context["candidate"] is None:
+            context["candidate"] = self._empty_structure(
+                context["candidate_direction"],
+            )
+
+        return context["candidate"]
+
+    def _promote_candidate(
+        self,
+        context,
+    ):
+
+        candidate = context["candidate"]
+
+        if candidate is None:
+            raise ValueError(
+                "Cannot promote missing candidate structure"
+            )
+
+        context["confirmed"] = candidate.copy()
+        context["candidate"] = None
+
+        context["last_confirmed_HH"] = candidate["HH"]
+        context["last_confirmed_HL"] = candidate["HL"]
+        context["last_confirmed_LL"] = candidate["LL"]
+        context["last_confirmed_LH"] = candidate["LH"]
 
     def _protected_high(
         self,
         context,
     ):
 
-        if context["candidate_direction"] == "BEARISH":
-            return self._active_pivot(
-                context["last_confirmed_LH"],
-            )
+        structure = self._target_structure(
+            context,
+        )
 
-        if (
-            context["candidate_direction"] is None
-            and context["trend"] == "BEARISH"
-        ):
+        if structure["trend"] == "BEARISH":
             return self._active_pivot(
-                context["last_confirmed_LH"],
+                structure["LH"],
             )
 
         return None
@@ -408,17 +500,13 @@ class StructureEngine:
         context,
     ):
 
-        if context["candidate_direction"] == "BULLISH":
-            return self._active_pivot(
-                context["last_confirmed_HL"],
-            )
+        structure = self._target_structure(
+            context,
+        )
 
-        if (
-            context["candidate_direction"] is None
-            and context["trend"] == "BULLISH"
-        ):
+        if structure["trend"] == "BULLISH":
             return self._active_pivot(
-                context["last_confirmed_HL"],
+                structure["HL"],
             )
 
         return None
@@ -445,6 +533,46 @@ class StructureEngine:
             return None
 
         return pivot.index
+
+    def _log_context_state(
+        self,
+        label,
+        context,
+    ):
+
+        logger.debug(
+            "[%s] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s "
+            "candidate=%s candidate_HH=%s candidate_HL=%s "
+            "candidate_LH=%s candidate_LL=%s",
+            label,
+            context["phase"],
+            context["trend"],
+            self._pivot_index(context["last_confirmed_HH"]),
+            self._pivot_index(context["last_confirmed_HL"]),
+            self._pivot_index(context["last_confirmed_LH"]),
+            self._pivot_index(context["last_confirmed_LL"]),
+            context["candidate_direction"],
+            self._pivot_index(
+                context["candidate"]["HH"]
+                if context.get("candidate")
+                else None
+            ),
+            self._pivot_index(
+                context["candidate"]["HL"]
+                if context.get("candidate")
+                else None
+            ),
+            self._pivot_index(
+                context["candidate"]["LH"]
+                if context.get("candidate")
+                else None
+            ),
+            self._pivot_index(
+                context["candidate"]["LL"]
+                if context.get("candidate")
+                else None
+            ),
+        )
 
     def _context_snapshot(
         self,
@@ -482,11 +610,27 @@ class StructureEngine:
         return {
             "trend": context["trend"],
             "phase": context["phase"],
+            "confirmed": context["confirmed"].copy(),
+            "candidate": (
+                context["candidate"].copy()
+                if context["candidate"] is not None
+                else None
+            ),
             "last_confirmed_HH": context["last_confirmed_HH"],
             "last_confirmed_HL": context["last_confirmed_HL"],
             "last_confirmed_LL": context["last_confirmed_LL"],
             "last_confirmed_LH": context["last_confirmed_LH"],
             "candidate_direction": context["candidate_direction"],
+            "reversal_attempt": context.get("reversal_attempt"),
+            "reversal_confirmation_start_index": context.get(
+                "reversal_confirmation_start_index",
+            ),
+            "failed_reversals": set(
+                context.get(
+                    "failed_reversals",
+                    set(),
+                )
+            ),
             "bos_count": len(
                 self.state.bos_events,
             ),
@@ -506,24 +650,8 @@ class StructureEngine:
         context,
         snapshot,
     ):
-        print("\n==============================")
-        print("RESTORE SNAPSHOT")
-        print("==============================")
-
-        print("Snapshot Trend :", snapshot["trend"])
-        print("Snapshot Phase :", snapshot["phase"])
-
-        print("Snapshot HH :", self._pivot_index(snapshot["last_confirmed_HH"]))
-        print("Snapshot HL :", self._pivot_index(snapshot["last_confirmed_HL"]))
-        print("Snapshot LH :", self._pivot_index(snapshot["last_confirmed_LH"]))
-        print("Snapshot LL :", self._pivot_index(snapshot["last_confirmed_LL"]))
 
         for pivot, broken, protected in snapshot["pivot_flags"]:
-            if pivot.broken and not broken:
-                print(
-                    f"BROKEN RESET -> idx={pivot.index} "
-                    f"kind={pivot.kind}"
-                )
             pivot.broken = broken
             pivot.protected = protected
 
@@ -546,32 +674,36 @@ class StructureEngine:
             {
                 "trend": snapshot["trend"],
                 "phase": snapshot["phase"],
+                "confirmed": snapshot["confirmed"].copy(),
+                "candidate": (
+                    snapshot["candidate"].copy()
+                    if snapshot["candidate"] is not None
+                    else None
+                ),
                 "last_confirmed_HH": snapshot["last_confirmed_HH"],
                 "last_confirmed_HL": snapshot["last_confirmed_HL"],
                 "last_confirmed_LL": snapshot["last_confirmed_LL"],
                 "last_confirmed_LH": snapshot["last_confirmed_LH"],
                 "candidate_direction": snapshot["candidate_direction"],
+                "reversal_attempt": snapshot.get("reversal_attempt"),
+                "reversal_confirmation_start_index": snapshot.get(
+                    "reversal_confirmation_start_index",
+                ),
+                "failed_reversals": set(
+                    snapshot["failed_reversals"],
+                ),
                 "reversal_snapshot": None,
             }
         )
-        print(
-            "CHOCH TARGET AFTER RESTORE :",
-            self._pivot_index(
-                self._choch_target(context)
-            ),
-        )
-
-        print(
-            "BOS TARGET AFTER RESTORE :",
-            self._pivot_index(
-                self._bos_target(context)
-            ),
-        )
 
         logger.debug(
-            "[RESTORE] trend=%s phase=%s BOS=%d CHOCH=%d",
+            "[RESTORE] trend=%s phase=%s HH=%s HL=%s LH=%s LL=%s BOS=%d CHOCH=%d",
             context["trend"],
             context["phase"],
+            self._pivot_index(context["last_confirmed_HH"]),
+            self._pivot_index(context["last_confirmed_HL"]),
+            self._pivot_index(context["last_confirmed_LH"]),
+            self._pivot_index(context["last_confirmed_LL"]),
             len(self.state.bos_events),
             len(self.state.choch_events),
         )
@@ -794,8 +926,8 @@ class StructureEngine:
             self.state.external_legs.append(
                 leg,
             )
-            print(
-                "INITIAL CONTEXT",
+            logger.debug(
+                "INITIAL CONTEXT %s %s %s %s %s",
                 trend,
                 start.index,
                 end.index,
@@ -803,20 +935,109 @@ class StructureEngine:
                 end.kind,
             )
 
+            confirmed = {
+                "trend": trend,
+                "HH": last_confirmed_HH,
+                "HL": last_confirmed_HL,
+                "LL": last_confirmed_LL,
+                "LH": last_confirmed_LH,
+            }
+
             return {
                 "trend": trend,
                 "phase": "WAITING_BOS",
                 "start_pivot": start,
                 "end_pivot": end,
+                "confirmed": confirmed,
+                "candidate": None,
                 "last_confirmed_HH": last_confirmed_HH,
                 "last_confirmed_HL": last_confirmed_HL,
                 "last_confirmed_LL": last_confirmed_LL,
                 "last_confirmed_LH": last_confirmed_LH,
                 "candidate_direction": None,
                 "reversal_snapshot": None,
+                "reversal_attempt": None,
+                "reversal_confirmation_start_index": None,
+                "failed_reversals": set(),
             }
 
         return None
+
+    def _reversal_key(
+        self,
+        direction,
+        pivot,
+    ):
+
+        if pivot is None:
+            return None
+
+        return (
+            direction,
+            pivot.index,
+            pivot.kind,
+            pivot.price,
+        )
+
+    def _failed_reversal_blocks_break(
+        self,
+        context,
+        direction,
+        pivot,
+        candle,
+    ):
+
+        key = self._reversal_key(
+            direction,
+            pivot,
+        )
+
+        if key is None:
+            return False
+
+        failed_reversals = context.setdefault(
+            "failed_reversals",
+            set(),
+        )
+
+        if key not in failed_reversals:
+            return False
+
+        if (
+            direction == "BULLISH"
+            and candle.close <= pivot.price
+        ):
+            failed_reversals.remove(
+                key,
+            )
+            return False
+
+        if (
+            direction == "BEARISH"
+            and candle.close >= pivot.price
+        ):
+            failed_reversals.remove(
+                key,
+            )
+            return False
+
+        return True
+
+    def _mark_failed_reversal_key(
+        self,
+        context,
+        key,
+    ):
+
+        if key is None:
+            return
+
+        context.setdefault(
+            "failed_reversals",
+            set(),
+        ).add(
+            key,
+        )
 
     def _scan_external_breaks(
         self,
@@ -825,7 +1046,6 @@ class StructureEngine:
         start_index,
         end_index,
     ):
-
         start_index = max(
             0,
             start_index,
@@ -841,34 +1061,11 @@ class StructureEngine:
         )
 
         logger.debug(
-            "\n===================="
-        )
-        logger.debug(
-            "SCAN CALLED"
-        )
-        logger.debug(
-            "FILE: %s",
-            __file__,
-        )
-        logger.debug(
-            "FUNCTION LINE: %s",
-            self._scan_external_breaks.__code__.co_firstlineno,
-        )
-        logger.debug(
-            "CONTEXT ID: %s",
-            id(context),
-        )
-        logger.debug(
-            "PHASE: %s",
+            "[SCAN] start=%s end=%s phase=%s trend=%s PH=%s PL=%s BOS=%s CHOCH=%s",
+            start_index,
+            end_index,
             context["phase"],
-        )
-        logger.debug(
-            "TREND: %s",
             context["trend"],
-        )
-
-        logger.debug(
-            "PH: %s PL: %s BOS: %s CHOCH: %s",
             self._pivot_index(
                 self._protected_high(context),
             ),
@@ -881,10 +1078,6 @@ class StructureEngine:
             self._pivot_index(
                 self._choch_target(context),
             ),
-        )
-
-        logger.debug(
-            "===================="
         )
 
         for index in range(
@@ -1018,26 +1211,38 @@ class StructureEngine:
             context=context,
         )
 
-        self._set_context_state(
+        if context["phase"].startswith(
+            "WAITING_REVERSAL"
+        ):
+            self._promote_candidate(
+                context,
+            )
+            self._set_context_state(
+                context,
+                phase="WAITING_PULLBACK",
+                trend="BULLISH",
+                candidate_direction=None,
+                reversal_snapshot=None,
+                reversal_attempt=None,
+                reversal_confirmation_start_index=None,
+            )
+        else:
+            self._set_context_state(
+                context,
+                phase="WAITING_PULLBACK",
+                trend="BULLISH",
+
+                last_confirmed_HH=pivot,
+                last_confirmed_HL=self._protected_low(context),
+
+                candidate_direction=None,
+                reversal_snapshot=None,
+                reversal_attempt=None,
+                reversal_confirmation_start_index=None,
+            )
+        self._log_context_state(
+            "STATE AFTER BULLISH BOS",
             context,
-            phase="WAITING_PULLBACK",
-            trend="BULLISH",
-
-            last_confirmed_HH=pivot,
-            last_confirmed_HL=self._protected_low(context),
-
-            candidate_direction=None,
-            reversal_snapshot=None,
-        )
-        logger.debug(
-            "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-            context["phase"],
-            context["trend"],
-            self._pivot_index(context["last_confirmed_HH"]),
-            self._pivot_index(context["last_confirmed_HL"]),
-            self._pivot_index(context["last_confirmed_LH"]),
-            self._pivot_index(context["last_confirmed_LL"]),
-            context["candidate_direction"],
         )
 
         return True
@@ -1070,26 +1275,38 @@ class StructureEngine:
             context=context,
         )
 
-        self._set_context_state(
+        if context["phase"].startswith(
+            "WAITING_REVERSAL"
+        ):
+            self._promote_candidate(
+                context,
+            )
+            self._set_context_state(
+                context,
+                phase="WAITING_PULLBACK",
+                trend="BEARISH",
+                candidate_direction=None,
+                reversal_snapshot=None,
+                reversal_attempt=None,
+                reversal_confirmation_start_index=None,
+            )
+        else:
+            self._set_context_state(
+                context,
+                phase="WAITING_PULLBACK",
+                trend="BEARISH",
+
+                last_confirmed_LL=pivot,
+                last_confirmed_LH=self._protected_high(context),
+
+                candidate_direction=None,
+                reversal_snapshot=None,
+                reversal_attempt=None,
+                reversal_confirmation_start_index=None,
+            )
+        self._log_context_state(
+            "STATE AFTER BEARISH BOS",
             context,
-            phase="WAITING_PULLBACK",
-            trend="BEARISH",
-
-            last_confirmed_LL=pivot,
-            last_confirmed_LH=self._protected_high(context),
-
-            candidate_direction=None,
-            reversal_snapshot=None,
-        )
-        logger.debug(
-            "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-            context["phase"],
-            context["trend"],
-            self._pivot_index(context["last_confirmed_HH"]),
-            self._pivot_index(context["last_confirmed_HL"]),
-            self._pivot_index(context["last_confirmed_LH"]),
-            self._pivot_index(context["last_confirmed_LL"]),
-            context["candidate_direction"],
         )
 
         return True
@@ -1105,13 +1322,62 @@ class StructureEngine:
             context,
         )
 
-        if (
-            pivot is None
-            or pivot.broken
-            or pivot.kind != "LOW"
-            or candle.close >= pivot.price
-        ):
+        logger.debug(
+            "[BEAR CHOCH CHECK] "
+            "index=%s "
+            "pivot=%s "
+            "broken=%s "
+            "kind=%s "
+            "pivot_price=%s "
+            "close=%s "
+            "phase=%s "
+            "trend=%s",
+            index,
+            self._pivot_index(pivot) if pivot else None,
+            pivot.broken if pivot else None,
+            pivot.kind if pivot else None,
+            pivot.price if pivot else None,
+            candle.close,
+            context["phase"],
+            context["trend"],
+        )
+        if pivot is None:
+            logger.debug("FAIL: pivot is None")
             return False
+
+        if self._failed_reversal_blocks_break(
+            context,
+            "BEARISH",
+            pivot,
+            candle,
+        ):
+            logger.debug(
+                "FAIL: bearish reversal not re-armed for pivot %s",
+                pivot.index,
+            )
+            return False
+
+        if pivot.broken:
+            logger.debug("FAIL: pivot already broken")
+            return False
+
+        if pivot.kind != "LOW":
+            logger.debug("FAIL: pivot kind=%s", pivot.kind)
+            return False
+
+        if candle.close >= pivot.price:
+            logger.debug(
+                "FAIL: close %.2f >= pivot %.2f",
+                candle.close,
+                pivot.price,
+            )
+            return False
+
+        logger.debug(
+            "SUCCESS: BEARISH CHOCH at candle %s under pivot %s",
+            index,
+            pivot.index,
+        )
 
         reversal_snapshot = self._context_snapshot(
             context,
@@ -1131,17 +1397,20 @@ class StructureEngine:
             phase="WAITING_REVERSAL_PULLBACK",
             trend=context["trend"],
             candidate_direction="BEARISH",
+            candidate=self._empty_structure(
+                "BEARISH",
+            ),
             reversal_snapshot=reversal_snapshot,
+            reversal_attempt=self._reversal_key(
+                "BEARISH",
+                pivot,
+            ),
+            reversal_confirmation_start_index=None,
         )
-        logger.debug(
-            "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-            context["phase"],
-            context["trend"],
-            self._pivot_index(context["last_confirmed_HH"]),
-            self._pivot_index(context["last_confirmed_HL"]),
-            self._pivot_index(context["last_confirmed_LH"]),
-            self._pivot_index(context["last_confirmed_LL"]),
-            context["candidate_direction"],
+
+        self._log_context_state(
+            "STATE AFTER BEARISH CHOCH",
+            context,
         )
 
         return True
@@ -1153,17 +1422,59 @@ class StructureEngine:
         index,
     ):
 
-        pivot = self._choch_target(
-            context,
+        pivot = self._choch_target(context)
+
+        logger.debug(
+            "[BULL CHOCH CHECK] index=%s pivot=%s close=%s phase=%s trend=%s",
+            index,
+            None if pivot is None else (
+                pivot.index,
+                pivot.kind,
+                pivot.price,
+                pivot.broken,
+            ),
+            candle.close,
+            context["phase"],
+            context["trend"],
         )
 
-        if (
-            pivot is None
-            or pivot.broken
-            or pivot.kind != "HIGH"
-            or candle.close <= pivot.price
-        ):
+        if pivot is None:
+            logger.debug("FAIL: pivot is None")
             return False
+
+        if self._failed_reversal_blocks_break(
+            context,
+            "BULLISH",
+            pivot,
+            candle,
+        ):
+            logger.debug(
+                "FAIL: bullish reversal not re-armed for pivot %s",
+                pivot.index,
+            )
+            return False
+
+        if pivot.broken:
+            logger.debug("FAIL: pivot already broken")
+            return False
+
+        if pivot.kind != "HIGH":
+            logger.debug("FAIL: pivot kind=%s", pivot.kind)
+            return False
+
+        if candle.close <= pivot.price:
+            logger.debug(
+                "FAIL: close %.2f <= pivot %.2f",
+                candle.close,
+                pivot.price,
+            )
+            return False
+
+        logger.debug(
+            "SUCCESS: BULLISH CHOCH at candle %s over pivot %s",
+            index,
+            pivot.index,
+        )
 
         reversal_snapshot = self._context_snapshot(
             context,
@@ -1183,17 +1494,20 @@ class StructureEngine:
             phase="WAITING_REVERSAL_PULLBACK",
             trend=context["trend"],
             candidate_direction="BULLISH",
+            candidate=self._empty_structure(
+                "BULLISH",
+            ),
             reversal_snapshot=reversal_snapshot,
+            reversal_attempt=self._reversal_key(
+                "BULLISH",
+                pivot,
+            ),
+            reversal_confirmation_start_index=None,
         )
-        logger.debug(
-            "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-            context["phase"],
-            context["trend"],
-            self._pivot_index(context["last_confirmed_HH"]),
-            self._pivot_index(context["last_confirmed_HL"]),
-            self._pivot_index(context["last_confirmed_LH"]),
-            self._pivot_index(context["last_confirmed_LL"]),
-            context["candidate_direction"],
+
+        self._log_context_state(
+            "STATE AFTER BULLISH CHOCH",
+            context,
         )
 
         return True
@@ -1220,6 +1534,12 @@ class StructureEngine:
         if context["phase"] != "WAITING_REVERSAL_CONFIRMATION":
             return False
 
+        if self._check_reversal_timeout(
+            context,
+            index,
+        ):
+            return True
+
         return self._confirm_reversal_bos(
             candle,
             context,
@@ -1233,15 +1553,38 @@ class StructureEngine:
         index,
     ):
 
+        confirmed = context["confirmed"]
+        candidate = context.get("candidate") or {}
+
         logger.debug(
-            "[REVERSAL] phase=%s PH=%s PL=%s BOS=%s "
-            "CHOCH=%s candle=%s close=%s",
+            "[REVERSAL] phase=%s "
+            "confirmed_HH=%s confirmed_HL=%s confirmed_LH=%s confirmed_LL=%s "
+            "candidate_HH=%s candidate_HL=%s candidate_LH=%s candidate_LL=%s "
+            "BOS=%s CHOCH=%s candle=%s close=%s",
             context["phase"],
             self._pivot_index(
-                self._protected_high(context),
+                confirmed.get("HH"),
             ),
             self._pivot_index(
-                self._protected_low(context),
+                confirmed.get("HL"),
+            ),
+            self._pivot_index(
+                confirmed.get("LH"),
+            ),
+            self._pivot_index(
+                confirmed.get("LL"),
+            ),
+            self._pivot_index(
+                candidate.get("HH"),
+            ),
+            self._pivot_index(
+                candidate.get("HL"),
+            ),
+            self._pivot_index(
+                candidate.get("LH"),
+            ),
+            self._pivot_index(
+                candidate.get("LL"),
             ),
             self._pivot_index(
                 self._bos_target(context),
@@ -1252,6 +1595,38 @@ class StructureEngine:
             index,
             candle.close,
         )
+
+    def _check_reversal_timeout(
+        self,
+        context,
+        index,
+    ):
+
+        timeout = self.reversal_confirmation_timeout
+
+        if timeout is None:
+            return False
+
+        start_index = context.get(
+            "reversal_confirmation_start_index",
+        )
+
+        if start_index is None:
+            return False
+
+        if index - start_index <= timeout:
+            return False
+
+        logger.debug(
+            ">>> CANCEL REVERSAL (%s timeout after %s candles)",
+            context["candidate_direction"],
+            index - start_index,
+        )
+        self._cancel_reversal(
+            context,
+        )
+
+        return True
 
     def _check_reversal_cancel(
         self,
@@ -1277,6 +1652,8 @@ class StructureEngine:
             )
             self._cancel_reversal(
                 context,
+                direction,
+                pivot,
             )
 
             return True
@@ -1291,6 +1668,8 @@ class StructureEngine:
             )
             self._cancel_reversal(
                 context,
+                direction,
+                pivot,
             )
 
             return True
@@ -1326,10 +1705,15 @@ class StructureEngine:
     def _cancel_reversal(
         self,
         context,
+        failed_direction=None,
+        failed_pivot=None,
     ):
 
         snapshot = context.get(
             "reversal_snapshot",
+        )
+        failed_key = context.get(
+            "reversal_attempt",
         )
 
         if snapshot is None:
@@ -1339,16 +1723,21 @@ class StructureEngine:
                 trend=context["trend"],
                 candidate_direction=None,
                 reversal_snapshot=None,
+                reversal_attempt=None,
+                reversal_confirmation_start_index=None,
             )
-            logger.debug(
-                "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                context["phase"],
-                context["trend"],
-                self._pivot_index(context["last_confirmed_HH"]),
-                self._pivot_index(context["last_confirmed_HL"]),
-                self._pivot_index(context["last_confirmed_LH"]),
-                self._pivot_index(context["last_confirmed_LL"]),
-                context["candidate_direction"],
+            if failed_key is None:
+                failed_key = self._reversal_key(
+                    failed_direction,
+                    failed_pivot,
+                )
+            self._mark_failed_reversal_key(
+                context,
+                failed_key,
+            )
+            self._log_context_state(
+                "STATE AFTER CANCEL REVERSAL",
+                context,
             )
 
             return
@@ -1356,6 +1745,16 @@ class StructureEngine:
         self._restore_context_snapshot(
             context,
             snapshot,
+        )
+
+        if failed_key is None:
+            failed_key = self._reversal_key(
+                failed_direction,
+                failed_pivot,
+            )
+        self._mark_failed_reversal_key(
+            context,
+            failed_key,
         )
 
         self._publish_external_context(
@@ -1387,15 +1786,9 @@ class StructureEngine:
                     last_confirmed_HL=pivot,
                     candidate_direction=None,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BULLISH PULLBACK",
+                    context,
                 )
 
             elif (
@@ -1410,15 +1803,9 @@ class StructureEngine:
                     last_confirmed_LH=pivot,
                     candidate_direction=None,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BEARISH PULLBACK",
+                    context,
                 )
 
             return
@@ -1432,44 +1819,40 @@ class StructureEngine:
                 context["candidate_direction"] == "BEARISH"
                 and pivot.kind == "HIGH"
             ):
+                candidate = self._candidate_structure(
+                    context,
+                )
+                candidate["LH"] = pivot
+
                 self._set_context_state(
                     context,
                     phase="WAITING_REVERSAL_CONTINUATION",
                     trend=context["trend"],
-                    last_confirmed_LH=pivot,
                     candidate_direction="BEARISH",
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BEARISH REVERSAL PULLBACK",
+                    context,
                 )
 
             elif (
                 context["candidate_direction"] == "BULLISH"
                 and pivot.kind == "LOW"
             ):
+                candidate = self._candidate_structure(
+                    context,
+                )
+                candidate["HL"] = pivot
+
                 self._set_context_state(
                     context,
                     phase="WAITING_REVERSAL_CONTINUATION",
                     trend=context["trend"],
-                    last_confirmed_HL=pivot,
                     candidate_direction="BULLISH",
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BULLISH REVERSAL PULLBACK",
+                    context,
                 )
 
 
@@ -1484,46 +1867,83 @@ class StructureEngine:
                 context["candidate_direction"] == "BEARISH"
                 and pivot.kind == "LOW"
             ):
+                candidate = self._candidate_structure(
+                    context,
+                )
+                candidate["LL"] = pivot
+
                 self._set_context_state(
                     context,
                     phase="WAITING_REVERSAL_CONFIRMATION",
                     trend=context["trend"],
-                    last_confirmed_LL=pivot,
                     candidate_direction=context["candidate_direction"],
+                    reversal_confirmation_start_index=pivot.index,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BEARISH REVERSAL CONTINUATION",
+                    context,
                 )
 
             elif (
                 context["candidate_direction"] == "BULLISH"
                 and pivot.kind == "HIGH"
             ):
+                candidate = self._candidate_structure(
+                    context,
+                )
+                candidate["HH"] = pivot
+
                 self._set_context_state(
                     context,
                     phase="WAITING_REVERSAL_CONFIRMATION",
                     trend=context["trend"],
-                    last_confirmed_HH=pivot,
                     candidate_direction=context["candidate_direction"],
+                    reversal_confirmation_start_index=pivot.index,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BULLISH REVERSAL CONTINUATION",
+                    context,
                 )
 
+
+            return
+
+        # ----------------------------------------------------
+        # Candidate invalidation before reversal confirmation
+        # ----------------------------------------------------
+        if phase == "WAITING_REVERSAL_CONFIRMATION":
+
+            candidate = context.get("candidate") or {}
+
+            if (
+                context["candidate_direction"] == "BULLISH"
+                and pivot.kind == "LOW"
+                and candidate.get("HL") is not None
+                and pivot.price < candidate["HL"].price
+            ):
+                logger.debug(
+                    ">>> CANCEL REVERSAL (BULLISH invalidated by lower low %s)",
+                    pivot.index,
+                )
+                self._cancel_reversal(
+                    context,
+                )
+                return
+
+            if (
+                context["candidate_direction"] == "BEARISH"
+                and pivot.kind == "HIGH"
+                and candidate.get("LH") is not None
+                and pivot.price > candidate["LH"].price
+            ):
+                logger.debug(
+                    ">>> CANCEL REVERSAL (BEARISH invalidated by higher high %s)",
+                    pivot.index,
+                )
+                self._cancel_reversal(
+                    context,
+                )
+                return
 
             return
 
@@ -1545,15 +1965,9 @@ class StructureEngine:
                     last_confirmed_HH=pivot,
                     candidate_direction=None,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BULLISH CONTINUATION PIVOT",
+                    context,
                 )
 
 
@@ -1569,15 +1983,9 @@ class StructureEngine:
                     last_confirmed_LL=pivot,
                     candidate_direction=None,
                 )
-                logger.debug(
-                    "[STATE AFTER BOS] phase=%s trend=%s HH=%s HL=%s LH=%s LL=%s candidate=%s",
-                    context["phase"],
-                    context["trend"],
-                    self._pivot_index(context["last_confirmed_HH"]),
-                    self._pivot_index(context["last_confirmed_HL"]),
-                    self._pivot_index(context["last_confirmed_LH"]),
-                    self._pivot_index(context["last_confirmed_LL"]),
-                    context["candidate_direction"],
+                self._log_context_state(
+                    "STATE AFTER BEARISH CONTINUATION PIVOT",
+                    context,
                 )
 
 
@@ -1590,6 +1998,27 @@ class StructureEngine:
         break_price,
         context=None,
     ):
+        protected_high = self.state.protected_high
+        protected_low = self.state.protected_low
+        current_trend = self.state.trend
+        confirmed = None
+        candidate = None
+
+        if context is not None:
+            current_trend = context["trend"]
+            protected_high = self._protected_high(
+                context,
+            )
+            protected_low = self._protected_low(
+                context,
+            )
+            confirmed = context.get(
+                "confirmed",
+            )
+            candidate = context.get(
+                "candidate",
+            )
+
         logger.debug(
             "Marked pivot %s as broken.",
             pivot.index,
@@ -1616,33 +2045,56 @@ class StructureEngine:
             pivot.price,
         )
 
-        protected_high = self.state.protected_high
-        protected_low = self.state.protected_low
-        current_trend = self.state.trend
-
-        if context is not None:
-            current_trend = context["trend"]
-            protected_high = self._protected_high(
-                context,
-            )
-            protected_low = self._protected_low(
-                context,
-            )
-
         logger.debug(
             "Current Trend : %s",
             current_trend,
         )
 
         logger.debug(
-            "Protected High: %s",
+            "Protected High before break: %s",
             self._pivot_index(protected_high),
         )
 
         logger.debug(
-            "Protected Low : %s",
+            "Protected Low before break : %s",
             self._pivot_index(protected_low),
         )
+
+        if confirmed is not None:
+            logger.debug(
+                "Confirmed structure before break: "
+                "HH=%s HL=%s LH=%s LL=%s",
+                self._pivot_index(
+                    confirmed.get("HH"),
+                ),
+                self._pivot_index(
+                    confirmed.get("HL"),
+                ),
+                self._pivot_index(
+                    confirmed.get("LH"),
+                ),
+                self._pivot_index(
+                    confirmed.get("LL"),
+                ),
+            )
+
+        if candidate is not None:
+            logger.debug(
+                "Candidate structure before break : "
+                "HH=%s HL=%s LH=%s LL=%s",
+                self._pivot_index(
+                    candidate.get("HH"),
+                ),
+                self._pivot_index(
+                    candidate.get("HL"),
+                ),
+                self._pivot_index(
+                    candidate.get("LH"),
+                ),
+                self._pivot_index(
+                    candidate.get("LL"),
+                ),
+            )
 
         if event_type == "BOS":
             self.state.bos_events.append(
@@ -1737,28 +2189,60 @@ class StructureEngine:
         last_confirmed_HL=_UNSET,
         last_confirmed_LL=_UNSET,
         last_confirmed_LH=_UNSET,
+        confirmed=_UNSET,
+        candidate=_UNSET,
         candidate_direction=None,
         reversal_snapshot=_UNSET,
+        reversal_attempt=_UNSET,
+        reversal_confirmation_start_index=_UNSET,
     ):
 
         if trend is not None:
             context["trend"] = trend
+            if (
+                "confirmed" in context
+                and context["confirmed"] is not None
+                and candidate_direction is None
+            ):
+                context["confirmed"]["trend"] = trend
 
         context["phase"] = phase
 
+        if confirmed is not _UNSET:
+            context["confirmed"] = confirmed
+
+        if candidate is not _UNSET:
+            context["candidate"] = candidate
+
+        self._ensure_structures(
+            context,
+        )
+
         if last_confirmed_HH is not _UNSET:
             context["last_confirmed_HH"] = last_confirmed_HH
+            context["confirmed"]["HH"] = last_confirmed_HH
 
         if last_confirmed_HL is not _UNSET:
             context["last_confirmed_HL"] = last_confirmed_HL
+            context["confirmed"]["HL"] = last_confirmed_HL
 
         if last_confirmed_LL is not _UNSET:
             context["last_confirmed_LL"] = last_confirmed_LL
+            context["confirmed"]["LL"] = last_confirmed_LL
 
         if last_confirmed_LH is not _UNSET:
             context["last_confirmed_LH"] = last_confirmed_LH
+            context["confirmed"]["LH"] = last_confirmed_LH
 
         context["candidate_direction"] = candidate_direction
 
         if reversal_snapshot is not _UNSET:
             context["reversal_snapshot"] = reversal_snapshot
+
+        if reversal_attempt is not _UNSET:
+            context["reversal_attempt"] = reversal_attempt
+
+        if reversal_confirmation_start_index is not _UNSET:
+            context["reversal_confirmation_start_index"] = (
+                reversal_confirmation_start_index
+            )

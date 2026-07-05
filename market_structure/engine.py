@@ -21,6 +21,8 @@ from market_structure.internal_structure import InternalStructureDetector
 
 class MarketStructureEngine:
 
+    ENABLE_VALIDATION = False
+
     def __init__(self):
 
         self.structure_engine = StructureEngine()
@@ -341,7 +343,8 @@ class MarketStructureEngine:
 
         )
 #below 1 line for testing purpose only, remove it in production
-        self.validate_context(context)
+        if ENABLE_VALIDATION:
+            self.validate_context(context)
 
         return context
 

@@ -18,7 +18,7 @@ class LiquidityLevel:
 
 class LiquidityDetector:
 #below 1 line for testing purpose only, change to 0.0015
-    PRICE_TOLERANCE = 0.003
+    PRICE_TOLERANCE = 0.0015
 
     MIN_TOUCHES = 2
 
