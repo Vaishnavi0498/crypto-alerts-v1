@@ -13,6 +13,9 @@ from plugins.scanner.rsi_plugin import (
 from plugins.scanner.choc_plugin import (
     ChoCHPlugin
 )
+from plugins.scanner.monthly_breakout_plugin import (
+    MonthlyBreakoutPlugin
+)
 
 
 def load_plugins(
@@ -42,5 +45,8 @@ def load_plugins(
         plugins.append(
             ChoCHPlugin()
         )
+
+    if interval == "monthly":
+        plugins.append(MonthlyBreakoutPlugin())
 
     return plugins
