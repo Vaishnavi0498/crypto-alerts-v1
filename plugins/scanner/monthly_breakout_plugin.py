@@ -47,10 +47,10 @@ class MonthlyBreakoutPlugin(BasePlugin):
         ):
 
             return []
-        TEST_PERCENT = 0.96
-        broke_30 = current_high > (high_30 * TEST_PERCENT)
-        broke_60 = current_high > (high_60 * TEST_PERCENT)
-        broke_90 = current_high > (high_90 * TEST_PERCENT)
+        
+        broke_30 = current_high > high_30
+        broke_60 = current_high > high_60
+        broke_90 = current_high > high_90
 
         if not (
             broke_30
