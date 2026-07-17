@@ -52,14 +52,27 @@ class HourlyMovePlugin(
             else "DOWN"
         )
 
-        notes = (
-            f"{symbol} moved "
-            f"{move_pct:.2f}% "
-            f"in the last completed 1h candle.\n\n"
-            f"Direction: {direction}\n"
-            f"Open: {open_price}\n"
-            f"Close: {close_price}"
-        )
+        notes = f"""
+        📈 HOURLY MOVE ALERT
+
+        Symbol:
+        {symbol}
+
+        Price:
+        {close_price}
+
+        Move:
+        {move_pct:.2f}%
+
+        Direction:
+        {direction}
+
+        Open:
+        {open_price}
+
+        Close:
+        {close_price}
+        """
 
         events.append(
             {

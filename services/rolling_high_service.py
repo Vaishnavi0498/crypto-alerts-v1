@@ -8,15 +8,31 @@ from data_sources.binance_daily_klines import (
 
 class RollingHighService:
 
-    LOOKBACK_DAYS = 30
+    LOOKBACK_PERIODS = [
+        30,
+        60,
+        90,
+    ]
+
+    MAX_LOOKBACK = max(
+        LOOKBACK_PERIODS
+    )
 
     def __init__(self):
 
         self.lock = threading.Lock()
 
-        self.monthly_highs = {}
+        self.highs = {
+            30: {},
+            60: {},
+            90: {},
+        }
 
-        self.last_alerted_level = {}
+        self.last_alerted_level = {
+            30: {},
+            60: {},
+            90: {},
+        }
 
         self.last_refresh_date = None
 
@@ -40,7 +56,7 @@ class RollingHighService:
                 return
 
             print(
-                "Refreshing 30-day highs..."
+                "Refreshing rolling highs..."
             )
 
             for symbol in symbols:
@@ -49,7 +65,7 @@ class RollingHighService:
 
                     candles = get_daily_candles(
                         symbol=symbol,
-                        limit=self.LOOKBACK_DAYS + 1
+                        limit=self.MAX_LOOKBACK + 1
                     )
 
                     if len(candles) < 2:
@@ -58,14 +74,22 @@ class RollingHighService:
 
                     completed_days = candles[:-1]
 
-                    monthly_high = max(
-                        candle["high"]
-                        for candle in completed_days
-                    )
+                    for lookback in self.LOOKBACK_PERIODS:
 
-                    self.monthly_highs[
-                        symbol
-                    ] = monthly_high
+                        if len(completed_days) < lookback:
+
+                            continue
+
+                        period_high = max(
+                            candle["high"]
+                            for candle in completed_days[-lookback:]
+                        )
+
+                        self.highs[
+                            lookback
+                        ][
+                            symbol
+                        ] = period_high
 
                 except Exception as e:
 
@@ -76,42 +100,49 @@ class RollingHighService:
             self.last_refresh_date = today
 
             print(
-                "30-day high refresh complete."
+                "Rolling high refresh complete."
             )
 
     def get_high(
         self,
-        symbol
+        symbol,
+        lookback
     ):
 
         with self.lock:
 
-            return self.monthly_highs.get(
+            return self.highs[
+                lookback
+            ].get(
                 symbol
             )
-
 
     def get_last_alerted_level(
         self,
-        symbol
+        symbol,
+        lookback
     ):
 
         with self.lock:
 
-            return self.last_alerted_level.get(
+            return self.last_alerted_level[
+                lookback
+            ].get(
                 symbol
             )
-
 
     def mark_alerted(
         self,
         symbol,
+        lookback,
         level
     ):
 
         with self.lock:
 
             self.last_alerted_level[
+                lookback
+            ][
                 symbol
             ] = level
 

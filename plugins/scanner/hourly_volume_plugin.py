@@ -50,14 +50,24 @@ class HourlyVolumePlugin(
             candle_time
         )
 
-        notes = (
-            f"Volume Spike\n\n"
-            f"Current Volume: "
-            f"{latest['volume']:.2f}\n"
-            f"Average Volume: "
-            f"{avg_volume:.2f}"
-        )
+        notes = f"""
+        📊 HOURLY VOLUME SPIKE
 
+        Symbol:
+        {symbol}
+
+        Price:
+        {latest["close"]}
+
+        Current Volume:
+        {latest["volume"]:.2f}
+
+        Average Volume:
+        {avg_volume:.2f}
+
+        Volume Multiple:
+        {latest["volume"] / avg_volume:.2f}x
+        """
         return [
             {
                 "symbol": symbol,

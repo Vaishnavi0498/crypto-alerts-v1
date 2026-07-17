@@ -132,9 +132,23 @@ class RSIPlugin(
                 "symbol": symbol,
                 "price": latest["close"],
                 "notes":
-                    f"RSI Cross Alert\n\n"
-                    f"Previous RSI: {previous_rsi:.2f}\n"
-                    f"Current RSI: {current_rsi:.2f}\n"
-                    f"Threshold: {self.RSI_THRESHOLD}"
+        f"""
+        🚨 RSI CROSS ALERT
+
+        Symbol:
+        {symbol}
+
+        Price:
+        {latest["close"]}
+
+        Previous RSI:
+        {previous_rsi:.2f}
+
+        Current RSI:
+        {current_rsi:.2f}
+
+        Threshold:
+        {self.RSI_THRESHOLD}
+        """
             }
         ]
